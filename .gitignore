@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 豆瓣输出目录
+output/
+douban_reviews_output/
+douban_movies_output/
+豆瓣用户_*/
+test_output/
+
+# 登录态文件（含敏感 Cookie）
+*.auth_state.json
+
+# 同步/进度状态文件
+.douban_sync_state.json
+.douban_reviews_progress.json
+.douban_notes_index.json
+
+# 用户配置文件
+config.yaml
+
+# 用户 Cookie 文件（含敏感登录凭证）
+cookie_file.txt
+cookie.txt
+
+# 系统文件
+.DS_Store
+Thumbs.db

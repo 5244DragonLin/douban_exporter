@@ -1,0 +1,100 @@
+# ============================================================
+# 豆瓣数据导出工具 - 示例配置文件
+#
+# 用法：
+#   python cli.py -c config.yaml          # 按 features 自动执行启用项
+#   python cli.py books -c config.yaml    # 读书列表（已读/想读/在读）
+#   python cli.py reviews -c config.yaml  # 书评
+#   python cli.py notes -c config.yaml   # 读书笔记
+#   python cli.py movies -c config.yaml   # 观影记录
+#   python cli.py games -c config.yaml   # 游戏记录
+#   python cli.py music -c config.yaml   # 音乐记录
+#
+# 结构说明：按功能分层，只需填写你需要的部分
+# ============================================================
+
+# ---- 功能开关（features，置顶）----
+# 控制各功能是否启用：true=启用，false=禁止。
+# 下方对应功能段的配置项始终保留，是否生效由这里决定。
+# 直接运行（不带子命令）时，自动执行这里启用的功能。
+features:
+  books: true        # 读书列表抓取（已读/想读/在读）
+  reviews: false     # 书评抓取（reviews 子命令，纯标准库 + Cookie）
+  notes: true        # 读书笔记（标注）抓取（notes 子命令）
+  movies: true       # 观影记录导出（看过/想看/在看）
+  games: true        # 游戏记录导出（玩过/想玩/在玩）
+  music: true        # 音乐记录导出（听过/想听/在听）
+
+# ---- 用户信息（user）----
+# id: 豆瓣用户 ID（命令行 --user 优先；书评目录 URL 由 id 自动构造）
+# cookie: 豆瓣登录 Cookie（浏览器控制台 document.cookie 复制）。
+#         用于抓取个人标签/书评全文，留空则匿名抓取。
+# cookie_file: 也可将 Cookie 存到文件，配置此路径（与 cookie 二选一）。
+user:
+  id: "YOUR_ID"
+  # cookie: ""
+  cookie_file: "cookie.txt"   # Cookie 存放到 cookie.txt，文件内容即 Cookie 字符串
+
+# ---- 书评抓取（reviews，纯标准库 + Cookie）----
+# output: 输出目录（含 md/ html/ 子目录）
+# format: md / html / both（默认 both）
+# limit: 限制抓取篇数（可选）
+reviews:
+  output: "douban_reviews_output"
+  format: "both"         # 输出格式：md / html / both
+  # incremental: false   # 增量模式：true 时跳过已抓取的书评（基于 .douban_reviews_index.json 索引）
+  # limit: 10    # 可选：限制每类抓取条数
+
+# ---- 读书列表抓取（books，已读/想读/在读）----
+# output: 输出目录
+# types: 指定抓取的分类（可选）。取值 collect=已读 / wish=想读 / do=在读
+#        命令行 --type 优先；若此处和命令行都不指定，则抓取全部三种
+# incremental: 默认增量模式：已有文件去重追加
+books:
+  output: "douban_books_output"
+  incremental: true
+  types:
+    - collect    # 已读
+    - wish       # 想读
+    - do         # 在读
+
+# ---- 读书笔记（标注）抓取（notes，纯标准库 + Cookie）----
+# 输出固定为 Markdown：按书名生成 {书名}.md
+notes:
+  output: "douban_notes_output"
+  # limit: 30    # 可选：限制抓取笔记条数
+  incremental: true                                # 默认增量模式：已有文件去重追加
+
+# ---- 观影记录导出（movies，纯标准库 + Cookie，无需 Playwright）----
+# 每个状态输出一个 JSON 文件：douban_movies_collect.json / douban_movies_wish.json / douban_movies_do.json
+# types: 指定抓取的状态（可选）。取值 collect=看过 / wish=想看 / do=在看
+movies:
+  output: "douban_movies_output"
+  incremental: true
+  types:
+    - collect    # 看过
+    - wish       # 想看
+    - do         # 在看
+
+# ---- 游戏记录导出（games，纯标准库 + Cookie，无需 Playwright）----
+# 每个状态输出一个 JSON 文件：douban_games_collect.json / douban_games_wish.json / douban_games_do.json
+# types: 指定抓取的状态（可选）。取值 collect=玩过 / wish=想玩 / do=在玩
+games:
+  output: "douban_games_output"
+  incremental: true
+  types:
+    - collect    # 玩过
+    - wish       # 想玩
+    - do         # 在玩
+
+# ---- 音乐记录导出（music，纯标准库 + Cookie，无需 Playwright）----
+# 每个状态输出一个 JSON 文件：douban_music_collect.json / douban_music_wish.json / douban_music_do.json
+# types: 指定抓取的状态（可选）。取值 collect=听过 / wish=想听 / do=在听
+music:
+  output: "douban_music_output"
+  incremental: true
+  types:
+    - collect    # 听过
+    - wish       # 想听
+    - do         # 在听
+

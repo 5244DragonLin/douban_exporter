@@ -1,0 +1,22 @@
+# cookie_file.example.txt
+# ============================================================
+# 豆瓣 Cookie 文件样例
+#
+# 用途：把豆瓣登录 Cookie 保存在本文件，然后在 config.yaml 中配置：
+#   user:
+#     cookie_file: "cookie_file.txt"
+#
+# 如何获取 Cookie：
+#   1. 用 Chrome/Edge 打开 https://www.douban.com 并登录
+#   2. 按 F12 打开开发者工具 -> Console（控制台）
+#   3. 输入 document.cookie 回车，复制输出内容
+#   4. 粘贴到下面（覆盖整行示例内容），保存为 cookie_file.txt
+#
+# 注意：
+#   - 文件内容即 Cookie 字符串；若含 dbcl2 的行，程序会优先取该行
+#   - 本文件为样例，请勿直接使用；真实文件建议命名为 cookie_file.txt
+#     （该文件名已在 .gitignore 中忽略，不会误提交）
+#   - Cookie 含敏感登录凭证，请勿分享或提交到公开仓库
+# ============================================================
+
+dbcl2=示例值; ck=示例值; bid=示例值
