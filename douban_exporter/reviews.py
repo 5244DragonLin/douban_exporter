@@ -151,11 +151,15 @@ h1 {{ font-size: 1.6em; border-bottom: 2px solid #eee; padding-bottom: 0.4em; }}
 def _merge_consecutive_blockquotes(soup):
     """把相邻的 <blockquote> 兄弟节点合并为一个。
 
-    豆瓣「引用」功能会把一段含多段的引文拆成多个相邻的 <blockquote>
-    （每段/每句一个），网页上显示为同一个引用块，但源 HTML 是分散的。
+    豆瓣「引用」功能会把同一引用块内的多段引文拆成多个相邻的 <blockquote>
+    （每段一个），网页上显示为同一个引用块，但源 HTML 是分散的。
     这里将它们合并成单个 <blockquote>，内部用 <p> 保留段落结构，
     避免导出到 Markdown/HTML 后被拆成多个独立引用块。
-    相邻 blockquote 之间若只有空白文本或空 <p>，一并跳过、参与合并。
+
+    注意：仅合并「真正相邻」（中间只有空白文本）的 blockquote；
+    如果中间夹着 <p>（哪怕是空 <p></p>，通常正是引用块之间的空行分隔）
+    或其他任何元素，则视为不同的引用块，停止合并、保持独立。
+    因此必须在删除空 <p> 之前调用本函数（见 _extract_review_content）。
     """
     for parent in [soup] + soup.find_all(True):
         kids = list(parent.children)
@@ -165,7 +169,7 @@ def _merge_consecutive_blockquotes(soup):
             if getattr(node, "name", None) != "blockquote":
                 i += 1
                 continue
-            # 收集一段「连续的 blockquote」；中间的空白文本 / 空 <p> 跳过
+            # 收集一段「连续相邻的 blockquote」；中间只允许空白文本
             run = [node]
             j = i + 1
             while j < len(kids):
@@ -177,11 +181,7 @@ def _merge_consecutive_blockquotes(soup):
                     run.append(nxt)
                     j += 1
                     continue
-                if (getattr(nxt, "name", None) == "p"
-                        and not nxt.get_text(strip=True)
-                        and not nxt.find(["img", "br"])):
-                    j += 1
-                    continue
+                # 出现任何其他元素（含空 <p></p>）即视为引用块边界，停止合并
                 break
             if len(run) > 1:
                 merged = soup.new_tag("blockquote")
@@ -251,12 +251,14 @@ def _extract_review_content(detail_html):
         for k in list(tag.attrs):
             if k not in allowed:
                 del tag[k]
+    # 合并连续的 <blockquote> 为单个引用块：豆瓣「引用」会把同一引用块内的多段引文
+    # 拆成多个相邻 blockquote，而引用块之间由空 <p></p> 分隔。
+    # 必须先于「删除空 <p>」执行，否则空段落被删掉后，多个引用块会被误合并成一个。
+    _merge_consecutive_blockquotes(soup)
     # 移除无内容的空 <p>（如 <p></p>），避免导出后出现空白段落
     for p in soup.find_all("p"):
         if not p.get_text(strip=True) and not p.find(["img", "br"]):
             p.extract()
-    # 合并连续的 <blockquote> 为单个引用块（豆瓣「引用」会把一段多段引文拆成多个相邻 blockquote）
-    _merge_consecutive_blockquotes(soup)
     content_html = str(soup).strip()
     content_text = soup.get_text("\n").strip()
     return content_html, content_text
