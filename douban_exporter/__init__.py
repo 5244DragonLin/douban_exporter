@@ -17,8 +17,9 @@ from .notes import notes_main
 from .movies import movies_main
 from .games import games_main
 from .music import music_main
+from .stats import stats_main
 from .core import (
-    _load_config, CONFIG_FILE, logger, __version__,
+    _load_config, CONFIG_FILE, logger,
 )
 
 def _auto_route_by_features(config_path=None):
@@ -91,6 +92,11 @@ def main():
         sys.argv.pop(1)
         music_main()
         return
+    # 子命令: stats — 豆瓣个人数据统计报告（读书 + 观影，无需网络）
+    if len(sys.argv) > 1 and sys.argv[1] == "stats":
+        sys.argv.pop(1)
+        stats_main()
+        return
 
     # 纯无参运行：根据 features 自动路由到启用的功能（置顶开关的意义所在）
     if len(sys.argv) == 1:
@@ -109,7 +115,8 @@ def main():
     # 未识别的子命令 / 参数：给出用法提示
     # （浏览器模式已移除，书评改用纯标准库 + Cookie 的 reviews 子命令抓取）
     print("未识别的参数或子命令。可用子命令：")
-    print("  books / reviews / notes / movies / games / music")
+    print("  books / reviews / notes / movies / games / music / stats")
     print("或无参数运行（按 config.yaml 的 features 自动执行）。")
     print("书评抓取示例：python cli.py reviews -c config.yaml")
+    print("统计报告示例：python cli.py stats -c config.yaml")
     sys.exit(2)

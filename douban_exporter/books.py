@@ -35,7 +35,6 @@ from .core import (
     _urllib_opener,
     _http_get,
     _clean_html_text,
-    __version__,
     DEFAULT_OUTPUT_DIR,
     CONFIG_FILE,
     logger,

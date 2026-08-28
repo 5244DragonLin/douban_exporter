@@ -11,7 +11,6 @@ import ssl
 import http.cookiejar
 from collections import Counter
 
-__version__ = "1.0.0"
 DEFAULT_OUTPUT_DIR = "douban_reviews_output"
 # 配置文件位于项目根目录（即本包所在目录的上一级）
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
