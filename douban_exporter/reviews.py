@@ -148,6 +148,57 @@ h1 {{ font-size: 1.6em; border-bottom: 2px solid #eee; padding-bottom: 0.4em; }}
 </html>"""
 
 
+def _merge_consecutive_blockquotes(soup):
+    """把相邻的 <blockquote> 兄弟节点合并为一个。
+
+    豆瓣「引用」功能会把一段含多段的引文拆成多个相邻的 <blockquote>
+    （每段/每句一个），网页上显示为同一个引用块，但源 HTML 是分散的。
+    这里将它们合并成单个 <blockquote>，内部用 <p> 保留段落结构，
+    避免导出到 Markdown/HTML 后被拆成多个独立引用块。
+    相邻 blockquote 之间若只有空白文本或空 <p>，一并跳过、参与合并。
+    """
+    for parent in [soup] + soup.find_all(True):
+        kids = list(parent.children)
+        i = 0
+        while i < len(kids):
+            node = kids[i]
+            if getattr(node, "name", None) != "blockquote":
+                i += 1
+                continue
+            # 收集一段「连续的 blockquote」；中间的空白文本 / 空 <p> 跳过
+            run = [node]
+            j = i + 1
+            while j < len(kids):
+                nxt = kids[j]
+                if isinstance(nxt, NavigableString) and not nxt.strip():
+                    j += 1
+                    continue
+                if getattr(nxt, "name", None) == "blockquote":
+                    run.append(nxt)
+                    j += 1
+                    continue
+                if (getattr(nxt, "name", None) == "p"
+                        and not nxt.get_text(strip=True)
+                        and not nxt.find(["img", "br"])):
+                    j += 1
+                    continue
+                break
+            if len(run) > 1:
+                merged = soup.new_tag("blockquote")
+                for bq in run:
+                    para = soup.new_tag("p")
+                    for c in list(bq.children):
+                        para.append(c)
+                    merged.append(para)
+                node.replace_with(merged)
+                for bq in run[1:]:
+                    bq.extract()
+                kids = list(parent.children)
+                i = 0
+                continue
+            i += 1
+
+
 def _extract_review_content(detail_html):
     """从书评详情页提取正文，返回 (content_html, content_text)。
 
@@ -200,6 +251,12 @@ def _extract_review_content(detail_html):
         for k in list(tag.attrs):
             if k not in allowed:
                 del tag[k]
+    # 移除无内容的空 <p>（如 <p></p>），避免导出后出现空白段落
+    for p in soup.find_all("p"):
+        if not p.get_text(strip=True) and not p.find(["img", "br"]):
+            p.extract()
+    # 合并连续的 <blockquote> 为单个引用块（豆瓣「引用」会把一段多段引文拆成多个相邻 blockquote）
+    _merge_consecutive_blockquotes(soup)
     content_html = str(soup).strip()
     content_text = soup.get_text("\n").strip()
     return content_html, content_text
@@ -211,12 +268,18 @@ def html_to_markdown(html):
         return ""
     soup = BeautifulSoup(html, "html.parser")
 
+    BLOCK_TAGS = {"p", "div", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6",
+                  "hr", "ul", "ol", "li", "pre", "table", "section", "article"}
+
     def _inline(node):
         out = []
         for c in node.children:
             if isinstance(c, NavigableString):
                 out.append(str(c))
             else:
+                # 块级子元素之间补换行，保证合并后的多段引用在 Markdown 里逐段成行
+                if c.name in BLOCK_TAGS and out and not out[-1].endswith("\n"):
+                    out.append("\n")
                 out.append(_inline_tag(c))
         return "".join(out)
 
@@ -267,8 +330,9 @@ def html_to_markdown(html):
         elif kind.startswith("#"):
             md.append(kind)
         elif kind == "blockquote":
-            for line in val.split("\n"):
-                md.append("> " + line)
+            # 整个引用块作为单一条目：内部段落用 \n 连接（行内多个 > 行），
+            # 避免被 "\n\n".join 拆成带空行的多个独立引用块
+            md.append("\n".join("> " + line for line in val.split("\n")))
         else:  # p
             if val:
                 md.append(val)
