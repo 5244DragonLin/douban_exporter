@@ -1,25 +1,17 @@
 # -*- coding: utf-8 -*-
-import os, re, sys, json, time, random, logging, argparse, csv, html
-from datetime import datetime
-from pathlib import Path
-from urllib.parse import urljoin
-from bs4 import BeautifulSoup, NavigableString
-from tqdm import tqdm
+"""共享库：HTTP 请求与 Cookie、HTML 清理、增量索引、配置文件加载与归一化。"""
+import os, re, sys, json, time, random, logging, html
 import urllib.request
-import urllib.parse
 import ssl
 import http.cookiejar
-from collections import Counter
 
 DEFAULT_OUTPUT_DIR = "douban_reviews_output"
 # 配置文件位于项目根目录（即本包所在目录的上一级）
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.yaml")
 logger = logging.getLogger("douban_exporter")
-DEFAULT_OUTPUT = os.path.join(os.path.expanduser("~"), "douban_books.json")
 DEFAULT_DELAY = (2.5, 4.5)  # 随机请求间隔（秒）
 MAX_RETRIES = 3
 RETRY_DELAY = 10  # 重试前等待秒数
-ITEMS_PER_PAGE = 15
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -88,11 +80,6 @@ def seed_ids_from_json(filepath, id_keys):
         return set()
 
 
-def parse_rating_from_class(class_str):
-    match = re.search(r"allstar(\d)0", class_str or "")
-    return int(match.group(1)) if match else 0
-
-
 def rating_to_stars(rating):
     return "★" * rating + "☆" * (5 - rating)
 
@@ -106,10 +93,7 @@ def randomized_delay(base, jitter):
 
 
 def make_ssl_context():
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    return ctx
+    return ssl.create_default_context()
 
 
 def make_opener(cookie_str=None):
@@ -154,8 +138,8 @@ def load_cookie_file(path):
         return None
 
 
-def fetch(url, opener, timeout=15):
-    """带重试的页面抓取。"""
+def fetch(url, opener, timeout=20):
+    """带重试的页面抓取，返回 HTML 文本或 None。"""
     req = urllib.request.Request(url)
     for attempt in range(MAX_RETRIES):
         try:
@@ -175,74 +159,18 @@ def random_delay():
     time.sleep(random.uniform(*DEFAULT_DELAY))
 
 
-def _save_checkpoint(results, json_path, every=50):
-    """每 every 条中间保存一次到 .tmp 文件，防止中断丢数据，不影响正式文件。"""
-    if len(results) % every == 0 and len(results) > 0:
-        tmp_path = json_path + ".tmp"
-        os.makedirs(os.path.dirname(os.path.abspath(tmp_path)), exist_ok=True)
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-        return True
-    return False
+def _save_checkpoint(results, json_path):
+    """把当前已抓结果保存到 .tmp 文件，防止中断丢数据，不影响正式文件。
 
-
-def load_existing_data(filepath, id_key="豆瓣ID"):
-    """读取已有数据文件（CSV 或 JSON），返回 {id: row} 字典。
-
-    id_key: 去重主键字段名（books 用「豆瓣ID」，notes 用「笔记ID」）。
+    保存节奏由调用方控制（每新增 50 条调用一次），本函数只负责写盘。
     """
-    if not os.path.exists(filepath):
-        return {}
-    existing = {}
-
-    if filepath.endswith(".json"):
-        try:
-            with open(filepath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            for item in data:
-                bid = item.get(id_key, "")
-                if bid:
-                    existing[str(bid)] = item
-        except Exception as e:
-            print(f"[警告] 读取已有 JSON 失败: {e}")
-    else:
-        try:
-            with open(filepath, "r", encoding="utf-8-sig") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    bid = row.get(id_key, "")
-                    if bid:
-                        existing[str(bid)] = row
-        except Exception as e:
-            print(f"[警告] 读取已有 CSV 失败: {e}")
-
-    return existing
-
-
-def save_data(books, filepath, mode="w", id_key="豆瓣ID"):
-    """
-    将书籍列表写入 JSON 文件。
-
-    Args:
-        books: list[dict]
-        filepath: 输出路径
-        mode: "w"（覆盖）或 "a"（追加）
-    """
-    if mode == "a":
-        existing = load_existing_data(filepath, id_key=id_key)
-        existing_bids = set(existing.keys())
-        new_books = [b for b in books if str(b.get(id_key, "")) not in existing_bids]
-        all_books = list(existing.values()) + new_books
-    else:
-        all_books = books
-
-    # 确保输出目录存在
-    os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-
-    # 写入 JSON
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(all_books, f, ensure_ascii=False, indent=2)
-    return len(all_books)
+    if not results:
+        return False
+    tmp_path = json_path + ".tmp"
+    os.makedirs(os.path.dirname(os.path.abspath(tmp_path)), exist_ok=True)
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
+    return True
 
 
 def _load_config(config_path):
@@ -268,11 +196,11 @@ def _normalize_config(cfg):
         cookie: "..."
         cookie_file: "..."
       books:
-        output: "douban_books.csv"
-        format: "csv"
-      reviews:
-        output: "douban_reviews_output"
-        format: "both"
+        output: "douban_books_output"
+        types: [collect, wish, do]
+      movies:
+        output: "douban_movies_output"
+        statuses: [collect, wish, do]
 
     旧版扁平键（user_id / cookie / books_output / reviews_output ...）
     仍可读取，分层键优先。
@@ -284,7 +212,7 @@ def _normalize_config(cfg):
     features = cfg.get("features") or {}
     if not isinstance(features, dict):
         features = {}
-    for feat in ("books", "reviews", "notes", "movies"):
+    for feat in ("books", "reviews", "notes", "movies", "games", "music"):
         val = features.get(feat, True)
         features[feat] = bool(val) if isinstance(val, bool) else (str(val).strip().lower() in ("1", "true", "yes", "on", "启用", "开启", "是"))
     cfg["features"] = features
@@ -329,73 +257,31 @@ def _normalize_config(cfg):
     if not isinstance(notes, dict):
         notes = {}
     notes.setdefault("output", cfg.get("notes_output"))
-    # 兼容性读取：旧配置可能写 format: json/csv，notes 现已固定为 md，忽略该值
     notes.setdefault("incremental", False)
     notes.setdefault("max_pages", None)
     cfg["notes"] = notes
 
-    # movies 子命令（观影记录导出，纯标准库 + Cookie，无需 Playwright）
-    movies = cfg.get("movies") or {}
-    if not isinstance(movies, dict):
-        movies = {}
-    movies.setdefault("output", cfg.get("movies_output"))
-    movies.setdefault("incremental", False)     # 增量模式：已有 movies.json 去重
-    movies.setdefault("limit", cfg.get("limit"))
-    # movies.types: 抓取的观影状态列表
-    #   collect=看过, wish=想看, do=在看；为空则默认三种全抓。
-    raw_statuses = movies.get("types")
-    if raw_statuses is not None:
+    # movies / games / music 子命令：状态过滤配置键统一为 statuses（兼容旧写法 types）
+    for key in ("movies", "games", "music"):
+        sec = cfg.get(key) or {}
+        if not isinstance(sec, dict):
+            sec = {}
+        sec.setdefault("output", cfg.get(f"{key}_output"))
+        sec.setdefault("incremental", False)
+        sec.setdefault("limit", cfg.get("limit"))
+        raw_statuses = sec.get("statuses", sec.get("types"))
+        valid = {"collect", "wish", "do"}
         if isinstance(raw_statuses, (list, tuple)):
-            valid = {"collect", "wish", "do"}
             parsed = [s for s in raw_statuses if s in valid]
-            movies["types"] = parsed if parsed else ["collect", "wish", "do"]
+        elif isinstance(raw_statuses, str):
+            parsed = [s.strip() for s in raw_statuses.split(",") if s.strip() in valid]
         else:
-            movies["types"] = ["collect", "wish", "do"]
-    else:
-        movies["types"] = ["collect", "wish", "do"]
-    cfg["movies"] = movies
+            parsed = []
+        sec["statuses"] = parsed or ["collect", "wish", "do"]
+        sec.pop("types", None)
+        cfg[key] = sec
 
-    # 顶层通用项（老式 reviews 配置兼容）
-    cfg.setdefault("output", cfg.get("output"))
-    cfg.setdefault("limit", cfg.get("limit"))
-    cfg.setdefault("incremental", cfg.get("incremental", False))
-    cfg.setdefault("visible", cfg.get("visible", False))
-    cfg.setdefault("format", cfg.get("format"))
     return cfg
-
-
-def _setup_logging():
-    pass  # 已弃用，改为纯 print 输出
-
-
-def _urllib_opener(cookie_str=None):
-    """创建纯 urllib 的 opener，可选注入登录 Cookie。"""
-    cj = http.cookiejar.CookieJar()
-    ctx = make_ssl_context()
-    opener = urllib.request.build_opener(
-        urllib.request.HTTPSHandler(context=ctx),
-        urllib.request.HTTPCookieProcessor(cj),
-    )
-    headers = [(k, v) for k, v in HEADERS.items()]
-    if cookie_str:
-        headers.append(("Cookie", cookie_str))
-    opener.addheaders = headers
-    return opener
-
-
-def _http_get(url, opener, timeout=20):
-    """带重试的 GET 抓取，返回 HTML 文本或 None。"""
-    req = urllib.request.Request(url)
-    for attempt in range(MAX_RETRIES):
-        try:
-            resp = opener.open(req, timeout=timeout)
-            return resp.read().decode("utf-8", errors="replace")
-        except Exception as e:
-            print(f" [警告] 获取 {url} 失败 (尝试 {attempt+1}/{MAX_RETRIES}): {e}")
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(RETRY_DELAY)
-            else:
-                return None
 
 
 def _clean_html_text(s):

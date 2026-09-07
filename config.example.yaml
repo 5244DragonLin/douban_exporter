@@ -67,33 +67,33 @@ notes:
 
 # ---- 观影记录导出（movies，纯标准库 + Cookie，无需 Playwright）----
 # 每个状态输出一个 JSON 文件：douban_movies_collect.json / douban_movies_wish.json / douban_movies_do.json
-# types: 指定抓取的状态（可选）。取值 collect=看过 / wish=想看 / do=在看
+# statuses: 指定抓取的状态（可选）。取值 collect=看过 / wish=想看 / do=在看
 movies:
   output: "douban_movies_output"
   incremental: true
-  types:
+  statuses:
     - collect    # 看过
     - wish       # 想看
     - do         # 在看
 
 # ---- 游戏记录导出（games，纯标准库 + Cookie，无需 Playwright）----
 # 每个状态输出一个 JSON 文件：douban_games_collect.json / douban_games_wish.json / douban_games_do.json
-# types: 指定抓取的状态（可选）。取值 collect=玩过 / wish=想玩 / do=在玩
+# statuses: 指定抓取的状态（可选）。取值 collect=玩过 / wish=想玩 / do=在玩
 games:
   output: "douban_games_output"
   incremental: true
-  types:
+  statuses:
     - collect    # 玩过
     - wish       # 想玩
     - do         # 在玩
 
 # ---- 音乐记录导出（music，纯标准库 + Cookie，无需 Playwright）----
 # 每个状态输出一个 JSON 文件：douban_music_collect.json / douban_music_wish.json / douban_music_do.json
-# types: 指定抓取的状态（可选）。取值 collect=听过 / wish=想听 / do=在听
+# statuses: 指定抓取的状态（可选）。取值 collect=听过 / wish=想听 / do=在听
 music:
   output: "douban_music_output"
   incremental: true
-  types:
+  statuses:
     - collect    # 听过
     - wish       # 想听
     - do         # 在听

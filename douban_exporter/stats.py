@@ -15,7 +15,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from urllib.parse import quote
 
-from .core import _load_config, DEFAULT_OUTPUT_DIR
+from .core import CONFIG_FILE, _load_config
 
 # ============================================================
 # 数据读取
@@ -162,15 +162,13 @@ def _year_group_bars(date_dist, label_w=90):
     return "\n".join(parts)
 
 
-def _rank_table(rows, name_col, link_col=None):
-    """排行表格：rows = [(名称, 次数, 可选链接)]"""
+def _rank_table(rows, name_col):
+    """排行表格：rows = [(名称, 次数)]"""
     lines = ['<table><thead><tr><th style="width:50px">#</th>'
              f'<th>{name_col}</th><th style="width:90px" class="num">数量</th></tr></thead><tbody>']
     for i, row in enumerate(rows, 1):
         name, cnt = row[0], row[1]
-        link = row[2] if len(row) > 2 else None
-        cell = f'<a href="{_esc(link)}" target="_blank">{_esc(name)}</a>' if link else _esc(name)
-        lines.append(f'<tr><td>{i}</td><td>{cell}</td><td class="num">{cnt}</td></tr>')
+        lines.append(f'<tr><td>{i}</td><td>{_esc(name)}</td><td class="num">{cnt}</td></tr>')
     lines.append("</tbody></table>")
     return "\n".join(lines)
 
@@ -215,7 +213,7 @@ def _books_section(collect, wish):
     pub_year = _build_rank(year_counter, 10)
     five_star = dist.get(5, 0)
 
-    h = [f'<h2 id="sec-books">📚 读书</h2>']
+    h = ['<h2 id="sec-books">📚 读书</h2>']
     # 概览
     h.append('<div class="cards">'
              f'<div class="card"><div class="card-num">{len(collect)}</div><div class="card-label">已读</div></div>'
@@ -260,7 +258,7 @@ def _movies_section(collect, wish):
     top_countries = _build_rank(country_counter, 10)
     five_star = dist.get(5, 0)
 
-    h = [f'<h2 id="sec-movies">🎬 观影</h2>']
+    h = ['<h2 id="sec-movies">🎬 观影</h2>']
     h.append('<div class="cards">'
              f'<div class="card"><div class="card-num">{len(collect)}</div><div class="card-label">看过</div></div>'
              f'<div class="card"><div class="card-num">{len(wish)}</div><div class="card-label">想看</div></div>'
@@ -432,21 +430,17 @@ def stats_main(config=None):
     args = parser.parse_args()
 
     if config is None:
-        config = _load_config(args.config)
-    user_cfg = config.get("user") or {}
+        config = _load_config(args.config or CONFIG_FILE)
     stats_cfg = config.get("stats") or {}
 
-    # 输出目录：命令行 > 配置 > 默认（读书记录目录的上一级）
+    # 输出目录：命令行 > 配置 > 默认（读书记录目录的上一级；未配置读书记录目录时用当前目录）
     if args.output:
         output_dir = os.path.abspath(args.output)
     elif stats_cfg.get("output"):
         output_dir = os.path.abspath(stats_cfg["output"])
     else:
-        default_books = "E:/BaiduSyncdisk/其他/豆瓣内容/读书记录"
-        books_out = os.path.abspath(stats_cfg.get("books_output")
-                                    or (config.get("books") or {}).get("output")
-                                    or default_books)
-        output_dir = os.path.dirname(books_out)
+        books_out = (config.get("books") or {}).get("output")
+        output_dir = os.path.dirname(os.path.abspath(books_out)) if books_out else os.getcwd()
     os.makedirs(output_dir, exist_ok=True)
 
     # 数据目录：书籍/观影各自的输出目录
@@ -465,7 +459,6 @@ def stats_main(config=None):
         print("[错误] 未找到读书/观影数据，请先运行 books / movies 抓取")
         sys.exit(1)
 
-    username = user_cfg.get("id", "")
     gen_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     books_html = _books_section(books_collect, books_wish)
     movies_html = _movies_section(movies_collect, movies_wish)

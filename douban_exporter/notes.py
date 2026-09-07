@@ -1,50 +1,32 @@
 # -*- coding: utf-8 -*-
-import os, re, sys, json, time, random, logging, argparse, csv, html
-from datetime import datetime
-from pathlib import Path
-from urllib.parse import urljoin
-from bs4 import BeautifulSoup, NavigableString
-from tqdm import tqdm
-import urllib.request
+"""读书笔记抓取（notes 子命令）：标注/划线摘录，输出 Markdown，纯标准库 + Cookie。"""
+import argparse
+import json
+import os
+import re
+import sys
+import time
 import urllib.parse
-import ssl
-import http.cookiejar
-from collections import Counter
+import urllib.request
+
+from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 from .core import (
-    sanitize_filename,
-    index_path,
-    load_index,
-    save_index,
-    seed_ids_from_json,
-    parse_rating_from_class,
-    rating_to_stars,
-    rating_to_label,
-    randomized_delay,
-    make_ssl_context,
-    make_opener,
-    load_cookie_file,
-    fetch,
-    random_delay,
-    _save_checkpoint,
-    load_existing_data,
-    save_data,
-    _load_config,
-    _normalize_config,
-    _setup_logging,
-    _urllib_opener,
-    _http_get,
-    _clean_html_text,
-    DEFAULT_OUTPUT_DIR,
     CONFIG_FILE,
-    logger,
-    DEFAULT_OUTPUT,
     DEFAULT_DELAY,
-    MAX_RETRIES,
-    RETRY_DELAY,
-    ITEMS_PER_PAGE,
+    DEFAULT_OUTPUT_DIR,
     HEADERS,
+    _load_config,
+    fetch,
+    load_cookie_file,
+    load_index,
+    logger,
+    make_opener,
+    random_delay,
+    save_index,
 )
+
 
 def _strip_tags(html_text):
     """去除 HTML 标签，返回纯文本（用于笔记正文 content 字段）。"""
@@ -78,55 +60,6 @@ def _format_rating(rating):
     if count:
         s += f"（{count}人评价）"
     return s
-
-
-def fetch_annotation_ids(opener, uid, max_pages=None, limit=None):
-    """从网页版读书笔记列表页获取笔记 ID（去重）。
-
-    页面每页约 5 条；新笔记链接为 /annotation/{9位ID}（不带 people 前缀），
-    旧笔记为 /people/{uid}/annotation/{id}。统一取 .annotations-item 容器内的链接，
-    避免误抓侧栏推荐区；自动翻页直到无新 ID（start 越界时页面渲染推荐区，靠去重自然截断）。
-    max_pages 仅用于测试/限页；limit 达到后提前停止翻页（避免测试时干等全量翻完）。
-    """
-    ids = []
-    seen = set()
-    pages = max_pages or 10**9
-    for page in range(1, pages + 1):
-        start = (page - 1) * 5
-        url = f"https://book.douban.com/people/{uid}/annotation" + (f"?start={start}" if start else "")
-        html = fetch(url, opener)
-        if not html:
-            break
-        soup = BeautifulSoup(html, "html.parser")
-        items = soup.select(".annotations-item")
-        # 从标题"我的笔记(N)"提取总数，用于兜底截断（防 start 越界后推荐区混入）
-        total = None
-        m = re.search(r"我的笔记[（(](\d+)[)）]", html)
-        if m:
-            total = int(m.group(1))
-        if total is not None:
-            pages = min(pages, (total + 4) // 5)
-        found_new = 0
-        # 页面按书聚合：每页约 5 本书，h3 的书名链接是老格式（书名级，不可当笔记），
-        # 真正的笔记 ID 在每本书的 ul.rnotes 里（新格式 9 位）
-        for a in soup.select(".annotations-item ul.rnotes a[href*='/annotation/']"):
-            m = re.search(r"/annotation/(\d+)", a.get("href", ""))
-            if not m:
-                continue
-            aid = m.group(1)
-            if aid not in seen:
-                seen.add(aid)
-                ids.append(aid)
-                found_new += 1
-                if limit and len(ids) >= limit:
-                    return ids  # 收集够了立即返回，不等本页/全部翻完
-        # 翻页进度（每 10 页打印一次），避免长时间无输出被误认为卡死
-        if page % 10 == 0:
-            print(f"  翻页进度：第 {page}/{min(pages, 10**9)} 页，已收集 {len(ids)} 条笔记 ID")
-        if found_new == 0 or len(items) < 5:
-            break
-        random_delay()
-    return ids
 
 
 def parse_annotation_books(opener, uid, page):

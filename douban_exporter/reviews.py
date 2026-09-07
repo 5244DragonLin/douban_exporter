@@ -1,52 +1,32 @@
 # -*- coding: utf-8 -*-
-import os, re, sys, json, time, random, logging, argparse, csv, html
-from datetime import datetime
-from pathlib import Path
-from urllib.parse import urljoin
+"""书评全文抓取（reviews 子命令）：标准库 + BeautifulSoup + Cookie，输出 Markdown / HTML。"""
+import argparse
+import os
+import re
+import sys
+import time
+
 from bs4 import BeautifulSoup, NavigableString
 from tqdm import tqdm
-import urllib.request
-import urllib.parse
-import ssl
-import http.cookiejar
-from collections import Counter
 
 from .core import (
-    sanitize_filename,
-    index_path,
-    load_index,
-    save_index,
-    seed_ids_from_json,
-    parse_rating_from_class,
-    rating_to_stars,
-    rating_to_label,
-    randomized_delay,
-    make_ssl_context,
-    make_opener,
-    load_cookie_file,
-    fetch,
-    random_delay,
-    _save_checkpoint,
-    load_existing_data,
-    save_data,
-    _load_config,
-    _normalize_config,
-    _setup_logging,
-    _urllib_opener,
-    _http_get,
-    _clean_html_text,
     DEFAULT_OUTPUT_DIR,
     CONFIG_FILE,
-    logger,
-    DEFAULT_OUTPUT,
-    DEFAULT_DELAY,
-    MAX_RETRIES,
-    RETRY_DELAY,
-    ITEMS_PER_PAGE,
-    HEADERS,
+    _clean_html_text,
+    _load_config,
+    fetch,
+    load_cookie_file,
+    load_index,
+    make_opener,
+    randomized_delay,
+    rating_to_label,
+    rating_to_stars,
+    sanitize_filename,
+    save_index,
 )
 
-def generate_markdown(review, book_info):
+
+def generate_markdown(review):
     lines = []
     title = review.get("review_title") or review.get("book_name") or "无标题书评"
     lines.append(f"# {title}")
@@ -55,10 +35,6 @@ def generate_markdown(review, book_info):
     book_name = review.get("book_name", "")
     if book_name:
         meta_parts.append(f"《{book_name}》")
-    for k, v in [("作者", book_info.get("author")), ("副标题", book_info.get("subtitle")),
-                  ("出版社", book_info.get("publisher")), ("出版年", book_info.get("pub_year"))]:
-        if v:
-            meta_parts.append(f"{k}：{v}")
     rating = review.get("rating", 0)
     if rating > 0:
         meta_parts.append(f"评分：{rating_to_stars(rating)} {review.get('rating_label') or rating_to_label(rating)}")
@@ -86,16 +62,12 @@ def generate_markdown(review, book_info):
     return "\n".join(lines)
 
 
-def generate_html(review, book_info):
+def generate_html(review):
     title = review.get("review_title") or review.get("book_name") or "无标题书评"
     book_name = review.get("book_name", "")
     meta_parts = []
     if book_name:
         meta_parts.append(f"《{book_name}》")
-    for k, v in [("作者", book_info.get("author")), ("副标题", book_info.get("subtitle")),
-                  ("出版社", book_info.get("publisher")), ("出版年", book_info.get("pub_year"))]:
-        if v:
-            meta_parts.append(f"{k}：{v}")
     rating = review.get("rating", 0)
     if rating > 0:
         meta_parts.append(f"评分：{rating_to_stars(rating)} {review.get('rating_label') or rating_to_label(rating)}")
@@ -204,8 +176,6 @@ def _extract_review_content(detail_html):
     content_html 保留原始排版结构（h2/h3/h4 标题、blockquote 引用、strong 加粗、
     a 链接、img 图片、hr 分隔线等），供 HTML 与 Markdown 两种输出复用；
     content_text 为去标签纯文本，仅作为无 HTML 时的兜底。
-    之前实现只抽取 <p>/<blockquote> 且强行剥离内联标签，导致标题、加粗、链接、
-    引用结构全部丢失，本函数改为保留完整结构。
     """
     if not detail_html:
         return "", ""
@@ -395,7 +365,7 @@ def reviews_main(config=None):
     if args.limit is None and reviews_cfg.get("limit") is not None:
         args.limit = reviews_cfg["limit"]
 
-    opener = _urllib_opener(cookie_str)
+    opener = make_opener(cookie_str)
     list_url = f"https://www.douban.com/people/{user_id}/reviews"
 
     # 运行模式（提前计算，便于头部统一展示）
@@ -417,7 +387,7 @@ def reviews_main(config=None):
     with tqdm(total=None, desc="书评列表", unit="页", ncols=90, leave=True) as pbar:
         while True:
             url = list_url if page_num == 0 else f"{list_url}?start={page_num * 10}"
-            html_text = _http_get(url, opener)
+            html_text = fetch(url, opener)
             if not html_text:
                 tqdm.write(f" [警告] 第 {page_num+1} 页抓取失败，停止翻页")
                 break
@@ -476,7 +446,7 @@ def reviews_main(config=None):
         review_items = [it for it in review_items if it["rid"] not in existing_ids]
         _skipped = _before - len(review_items)
         if _skipped:
-            print(f"  书评: 已有 {len(existing_ids)} 篇，无新增，停止")
+            print(f"  书评: 跳过已抓取 {_skipped} 篇，新增 {len(review_items)} 篇")
         if not review_items:
             return
     if not review_items:
@@ -494,7 +464,7 @@ def reviews_main(config=None):
     bar = tqdm(total=total, desc="书评全文", unit="篇", ncols=90, leave=True)
     for idx, review in enumerate(review_items, 1):
         try:
-            detail = _http_get(review["review_url"], opener)
+            detail = fetch(review["review_url"], opener)
             if detail:
                 h1 = re.search(r"<h1[^>]*>(.*?)</h1>", detail, re.DOTALL)
                 if h1:
@@ -506,18 +476,15 @@ def reviews_main(config=None):
                 review["content_html"] = content_html
                 review["content"] = content_text
             # 写文件
-            book_info = {}
-            if review.get("book_url"):
-                book_info["book_url"] = review["book_url"]
             _base = sanitize_filename(f"《{review.get('book_name','未知')}》 - {review.get('review_title','')}")
             if fmt in ("md", "both"):
                 md_path = os.path.join(md_dir, _base + ".md")
                 with open(md_path, "w", encoding="utf-8") as f:
-                    f.write(generate_markdown(review, book_info))
+                    f.write(generate_markdown(review))
             if fmt in ("html", "both"):
                 html_path = os.path.join(html_dir, _base + ".html")
                 with open(html_path, "w", encoding="utf-8") as f:
-                    f.write(generate_html(review, book_info))
+                    f.write(generate_html(review))
             completed += 1
             bar.set_postfix(成功=completed, 失败=failed)
         except Exception as e:
