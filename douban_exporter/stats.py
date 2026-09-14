@@ -436,8 +436,8 @@ def stats_main(config=None):
     # 输出目录：命令行 > 配置 > 默认（读书记录目录的上一级；未配置读书记录目录时用当前目录）
     if args.output:
         output_dir = os.path.abspath(args.output)
-    elif stats_cfg.get("output"):
-        output_dir = os.path.abspath(stats_cfg["output"])
+    elif stats_cfg.get("output_dir"):
+        output_dir = os.path.abspath(stats_cfg["output_dir"])
     else:
         books_out = (config.get("books") or {}).get("output")
         output_dir = os.path.dirname(os.path.abspath(books_out)) if books_out else os.getcwd()

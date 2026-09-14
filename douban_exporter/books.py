@@ -64,12 +64,13 @@ def books_main(config=None):
     # 加载 YAML 配置：优先使用调用方传入的 config，否则自行加载（未指定 -c 时自动加载同目录 config.yaml）
     if config is None:
         config = _load_config(args.config or CONFIG_FILE)
+    auth_cfg = config.get("auth") or {}
     user_cfg = config.get("user") or {}
     books_cfg = config.get("books") or {}
 
     # 输出目录：命令行 -o > 配置 books.output > 默认 ~（books.output 为目录，文件名固定 douban_books_{分类}.json）
-    if not args.output and books_cfg.get("output"):
-        args.output = books_cfg["output"]
+    if not args.output and books_cfg.get("output_dir"):
+        args.output = books_cfg["output_dir"]
     if not args.output:
         args.output = os.path.expanduser("~")
 
@@ -89,7 +90,7 @@ def books_main(config=None):
 
     types_to_fetch = args.types or books_cfg.get("types") or ["collect", "wish", "do"]
 
-    cookie_str = resolve_cookie(args.cookie, args.cookie_file, user_cfg)
+    cookie_str = resolve_cookie(args.cookie, args.cookie_file, auth_cfg)
 
     total, saved_files = export_interests(
         user_id, args.output, types_to_fetch, run_mode, limit,

@@ -188,22 +188,23 @@ def _load_config(config_path):
 
 
 def _normalize_config(cfg):
-    """将配置规范化为统一结构，兼容旧版扁平键：
+    """将配置规范化为统一结构，兼容旧版扁平键与旧节名。
 
-    新版推荐分层结构：
-      user:
-        id: "132021081"
+    推荐分层结构（键名遵循《爬虫项目指南》统一规范）：
+      auth:
         cookie: "..."
         cookie_file: "..."
+      user:
+        id: "132021081"
       books:
-        output: "douban_books_output"
+        output_dir: "douban_books_output"
         types: [collect, wish, do]
       movies:
-        output: "douban_movies_output"
+        output_dir: "douban_movies_output"
         statuses: [collect, wish, do]
 
-    旧版扁平键（user_id / cookie / books_output / reviews_output ...）
-    仍可读取，分层键优先。
+    兼容项：旧 user.cookie / 顶层扁平键（user_id / cookie / books_output ...）、
+    各功能节旧键 output（现 output_dir）。分层新键优先。
     """
     if not isinstance(cfg, dict):
         return {}
@@ -217,21 +218,27 @@ def _normalize_config(cfg):
         features[feat] = bool(val) if isinstance(val, bool) else (str(val).strip().lower() in ("1", "true", "yes", "on", "启用", "开启", "是"))
     cfg["features"] = features
 
-    # 用户相关
+    # 认证（auth 节）：兼容旧 user.cookie / 旧扁平键
+    auth = cfg.get("auth") or {}
+    if not isinstance(auth, dict):
+        auth = {}
     user = cfg.get("user") or {}
     if not isinstance(user, dict):
         user = {}
-    user.setdefault("id", cfg.get("user_id"))
-    user.setdefault("cookie", cfg.get("cookie"))
-    user.setdefault("cookie_file", cfg.get("cookie_file"))
-    cfg["user"] = user
+    auth.setdefault("cookie", user.get("cookie") or cfg.get("cookie"))
+    auth.setdefault("cookie_file", user.get("cookie_file") or cfg.get("cookie_file"))
+    cfg["auth"] = auth
+    # user 节仅保留业务字段（id），凭据统一走 auth
+    cfg["user"] = {"id": user.get("id") or cfg.get("user_id")}
 
     # books 子命令
     books = cfg.get("books") or {}
     if not isinstance(books, dict):
         books = {}
-    books.setdefault("output", cfg.get("books_output"))
+    books.setdefault("output_dir", books.get("output") or cfg.get("books_output"))
+    books.pop("output", None)
     books.setdefault("format", cfg.get("books_format"))
+    books.setdefault("incremental", True)
     # books.types: 指定抓取分类（collect=已读 / wish=想读 / do=在读），
     # 非法值会被忽略，为空则交由运行时决定（默认全部）。
     raw_types = books.get("types")
@@ -248,16 +255,19 @@ def _normalize_config(cfg):
     reviews = cfg.get("reviews") or {}
     if not isinstance(reviews, dict):
         reviews = {}
-    reviews.setdefault("output", cfg.get("reviews_output"))
+    reviews.setdefault("output_dir", reviews.get("output") or cfg.get("reviews_output"))
+    reviews.pop("output", None)
     reviews.setdefault("format", cfg.get("reviews_format"))
+    reviews.setdefault("incremental", True)
     cfg["reviews"] = reviews
 
     # notes 子命令（读书笔记/标注抓取）—— 输出固定为 Markdown（每本书一个 {书名}.md）
     notes = cfg.get("notes") or {}
     if not isinstance(notes, dict):
         notes = {}
-    notes.setdefault("output", cfg.get("notes_output"))
-    notes.setdefault("incremental", False)
+    notes.setdefault("output_dir", notes.get("output") or cfg.get("notes_output"))
+    notes.pop("output", None)
+    notes.setdefault("incremental", True)
     notes.setdefault("max_pages", None)
     cfg["notes"] = notes
 
@@ -266,8 +276,9 @@ def _normalize_config(cfg):
         sec = cfg.get(key) or {}
         if not isinstance(sec, dict):
             sec = {}
-        sec.setdefault("output", cfg.get(f"{key}_output"))
-        sec.setdefault("incremental", False)
+        sec.setdefault("output_dir", sec.get("output") or cfg.get(f"{key}_output"))
+        sec.pop("output", None)
+        sec.setdefault("incremental", True)
         sec.setdefault("limit", cfg.get("limit"))
         raw_statuses = sec.get("statuses", sec.get("types"))
         valid = {"collect", "wish", "do"}

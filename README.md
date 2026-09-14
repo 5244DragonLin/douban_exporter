@@ -1,4 +1,4 @@
-﻿# douban_exporter：豆瓣数据导出工具
+# douban_exporter：豆瓣数据导出工具
 
 基于 Python 标准库 + BeautifulSoup + Cookie 的豆瓣个人数据导出工具：自动化抓取读书记录、读书笔记、观影/游戏/音乐记录与书评全文，支持增量去重，导出 Markdown / HTML / JSON。
 
@@ -257,7 +257,7 @@ python cli.py notes -u YOUR_ID --max-pages 3
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `-u, --user` | 豆瓣用户 ID | 配置 `user.id` 或交互输入 |
-| `-o, --output` | 输出目录 | 配置 `notes.output` 或 `~/` |
+| `-o, --output` | 输出目录 | 配置 `notes.output_dir` 或 `~/` |
 | `-m, --mode` | `full` 全量 / `incremental` 增量 | `full`（配置 `notes.incremental: true` 可默认增量） |
 | `-l, --limit` | 限制抓取笔记条数（测试用，强制全量并输出到 `test_output/`） | 全部 |
 | `--max-pages` | 笔记列表最大翻页数（测试用） | 不限制 |
@@ -305,7 +305,7 @@ python cli.py movies -u YOUR_ID -l 10
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `-u, --user` | 豆瓣用户 ID | 配置 `user.id` |
-| `-o, --output` | 输出根目录 | 配置 `movies.output` 或 `./douban_movies_output` |
+| `-o, --output` | 输出根目录 | 配置 `movies.output_dir` 或 `./douban_movies_output` |
 | `-s, --status` | 抓取状态 `collect`/`wish`/`do`，可逗号分隔 | 配置 `movies.statuses`（默认三种全抓） |
 | `-l, --limit` | 限制每状态抓取条数（测试用） | 配置 `movies.limit`（默认不限制） |
 | `-m, --mode` | `full` 全量 / `incremental` 增量 | `full`（配置 `movies.incremental: true` 可默认增量） |
@@ -336,7 +336,7 @@ python cli.py games -u YOUR_ID -l 10
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `-u, --user` | 豆瓣用户 ID | 配置 `user.id` |
-| `-o, --output` | 输出根目录 | 配置 `games.output` 或 `./douban_games_output` |
+| `-o, --output` | 输出根目录 | 配置 `games.output_dir` 或 `./douban_games_output` |
 | `-s, --status` | 抓取状态 `collect`/`wish`/`do`，可逗号分隔 | 配置 `games.statuses`（默认三种全抓） |
 | `-l, --limit` | 限制每状态抓取条数（测试用） | 配置 `games.limit`（默认不限制） |
 | `-m, --mode` | `full` 全量 / `incremental` 增量 | `full`（配置 `games.incremental: true` 可默认增量） |
@@ -367,7 +367,7 @@ python cli.py music -u YOUR_ID -l 10
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
 | `-u, --user` | 豆瓣用户 ID | 配置 `user.id` |
-| `-o, --output` | 输出根目录 | 配置 `music.output` 或 `./douban_music_output` |
+| `-o, --output` | 输出根目录 | 配置 `music.output_dir` 或 `./douban_music_output` |
 | `-s, --status` | 抓取状态 `collect`/`wish`/`do`，可逗号分隔 | 配置 `music.statuses`（默认三种全抓） |
 | `-l, --limit` | 限制每状态抓取条数（测试用） | 配置 `music.limit`（默认不限制） |
 | `-m, --mode` | `full` 全量 / `incremental` 增量 | `full`（配置 `music.incremental: true` 可默认增量） |
@@ -381,7 +381,7 @@ python cli.py music -u YOUR_ID -l 10
 读取本地读书/观影 JSON，生成单文件 HTML 统计报告（概览卡、年度趋势条形图、评分分布、作者/出版社/导演/演员/类型/地区排行、想读想看清单），无需网络。
 
 ```bash
-# 使用 config.yaml 的 books.output / movies.output 定位数据（未指定 -c 自动加载同目录 config.yaml）
+# 使用 config.yaml 的 books.output_dir / movies.output_dir 定位数据（未指定 -c 自动加载同目录 config.yaml）
 python cli.py stats
 
 # 指定报告输出目录
@@ -390,7 +390,7 @@ python cli.py stats -o D:\Report
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `-o, --output` | 报告输出目录 | 配置 `stats.output`，或读书记录目录的上一级 |
+| `-o, --output` | 报告输出目录 | 配置 `stats.output_dir`，或读书记录目录的上一级 |
 | `-c, --config` | YAML 配置文件（默认自动加载同目录 `config.yaml`） | 同目录 `config.yaml` |
 
 ## 📄配置文件
@@ -405,28 +405,30 @@ features:                  # 功能开关（置顶）：true=启用，false=禁�
   movies: true
   games: true
   music: true
+auth:                      # 登录凭据（与扫码登录二选一）
+  # cookie: "dbcl2=xxx; ck=xxx; bid=xxx"
+  cookie_file: "cookie.txt"
 user:
   id: "YOUR_ID"            # 豆瓣用户 ID（唯一必填）
-  # cookie_file: "cookie.txt"   # Cookie 也可放文件，与 cookie 二选一
 reviews:
-  output: "douban_reviews_output"
+  output_dir: "douban_reviews_output"
   format: "both"           # md / html / both
 books:
-  output: "douban_books_output"
+  output_dir: "douban_books_output"
   incremental: true
 notes:
-  output: "douban_notes_output"
+  output_dir: "douban_notes_output"
   incremental: true
 movies:
-  output: "douban_movies_output"
+  output_dir: "douban_movies_output"
   incremental: true
   # statuses: collect,wish,do    # 抓取状态（默认三种全抓）
 games:
-  output: "douban_games_output"
+  output_dir: "douban_games_output"
   incremental: true
   # statuses: collect,wish,do
 music:
-  output: "douban_music_output"
+  output_dir: "douban_music_output"
   incremental: true
   # statuses: collect,wish,do
 ```
@@ -466,7 +468,7 @@ douban_exporter/
     └── donate_wechat.jpg
 ```
 
-输出目录结构（各子命令输出文件；目录均可通过 `-o/--output` 或对应 `*.output` 配置自定义）：
+输出目录结构（各子命令输出文件；目录均可通过 `-o/--output` 或对应 `*.output_dir` 配置自定义）：
 
 ```text
 douban_reviews_output/          # reviews 书评
@@ -537,6 +539,10 @@ douban_music_output/            # music 音乐记录（文件命名同上，doub
 Fork → 创建分支 → 提交改动 → 发起 Pull Request。
 
 ## 📋更新日志
+
+### v0.3
+- **变更：** 配置键对齐《爬虫项目指南》统一规范：凭据从 `user` 节移入 `auth` 节（`user.id` 保留）、各功能节 `output` 改名 `output_dir`（`stats` 节同步）；六个功能节 `incremental` 代码默认值统一为 `true`（此前 notes/movies/games/music 代码默认 false、books/reviews 未设）
+- **优化：** 旧 `user` 节凭据与旧扁平键仍兼容读取，配置无需强制迁移
 
 ### v0.2.1
 - **修复：** movies / games / music 配置文件的状态过滤（`statuses`）此前不生效，现已统一并兼容旧写法 `types`

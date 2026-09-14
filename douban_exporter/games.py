@@ -48,6 +48,7 @@ def games_main(config=None):
 
     if config is None:
         config = _load_config(args.config or CONFIG_FILE)
+    auth_cfg = config.get("auth") or {}
     user_cfg = config.get("user") or {}
     games_cfg = config.get("games") or {}
 
@@ -56,7 +57,7 @@ def games_main(config=None):
         print("[错误] 未指定豆瓣用户 ID（命令行 -u 或配置 user.id）")
         sys.exit(1)
 
-    output_dir = os.path.abspath(args.output or games_cfg.get("output") or os.path.join(os.getcwd(), "douban_games_output"))
+    output_dir = os.path.abspath(args.output or games_cfg.get("output_dir") or os.path.join(os.getcwd(), "douban_games_output"))
 
     # 状态集合：命令行 --status > 配置 games.statuses
     statuses = parse_status_list(args.status if args.status else games_cfg.get("statuses"))
@@ -66,7 +67,7 @@ def games_main(config=None):
     if limit:
         run_mode = "full"
 
-    cookie_str = resolve_cookie(args.cookie, args.cookie_file, user_cfg)
+    cookie_str = resolve_cookie(args.cookie, args.cookie_file, auth_cfg)
 
     total, _ = export_interests(
         user_id, output_dir, statuses, run_mode, limit,

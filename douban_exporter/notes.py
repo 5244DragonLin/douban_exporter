@@ -356,6 +356,7 @@ def notes_main(config=None):
 
     if config is None:
         config = _load_config(args.config or CONFIG_FILE)
+    auth_cfg = config.get("auth") or {}
     user_cfg = config.get("user") or {}
     notes_cfg = config.get("notes") or {}
 
@@ -364,7 +365,7 @@ def notes_main(config=None):
         print("[错误] 未指定豆瓣用户 ID（命令行 -u 或配置 user.id）")
         sys.exit(1)
 
-    output_dir = os.path.abspath(args.output or notes_cfg.get("output") or config.get("notes_output") or DEFAULT_OUTPUT_DIR)
+    output_dir = os.path.abspath(args.output or notes_cfg.get("output_dir") or config.get("notes_output") or DEFAULT_OUTPUT_DIR)
     max_pages = args.max_pages or notes_cfg.get("max_pages")
     if args.limit is None:
         args.limit = notes_cfg.get("limit")
@@ -376,9 +377,9 @@ def notes_main(config=None):
         output_dir = os.path.join(output_dir, "test_output")
     os.makedirs(output_dir, exist_ok=True)
 
-    cookie_str = args.cookie or user_cfg.get("cookie") or os.environ.get("DOUBAN_COOKIE")
-    if not cookie_str and (args.cookie_file or user_cfg.get("cookie_file")):
-        cookie_str = load_cookie_file(args.cookie_file or user_cfg.get("cookie_file"))
+    cookie_str = args.cookie or auth_cfg.get("cookie") or os.environ.get("DOUBAN_COOKIE")
+    if not cookie_str and (args.cookie_file or auth_cfg.get("cookie_file")):
+        cookie_str = load_cookie_file(args.cookie_file or auth_cfg.get("cookie_file"))
     ck = None
     if cookie_str:
         m = re.search(r"(?:^|;\s*)ck=([^;]+)", cookie_str)

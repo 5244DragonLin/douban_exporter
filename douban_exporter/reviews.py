@@ -335,7 +335,7 @@ def reviews_main(config=None):
     # 加载 YAML 配置：优先使用调用方传入的 config，否则自行加载（未指定 -c 时自动加载同目录 config.yaml）
     if config is None:
         config = _load_config(args.config or CONFIG_FILE)
-    user_cfg = config.get("user") or {}
+    auth_cfg = config.get("auth") or {}
     reviews_cfg = config.get("reviews") or {}
 
     # 用户 ID：命令行 > 配置 user.id > 交互
@@ -347,7 +347,7 @@ def reviews_main(config=None):
         sys.exit(1)
 
     # 输出目录：命令行 > 配置 reviews.output > 默认
-    output_dir = args.output or reviews_cfg.get("output") or DEFAULT_OUTPUT_DIR
+    output_dir = args.output or reviews_cfg.get("output_dir") or DEFAULT_OUTPUT_DIR
     output_dir = os.path.abspath(output_dir)
 
     # 格式：命令行 --format > 配置 reviews.format > 默认 both；reviews 仅支持 md/html/both
@@ -357,9 +357,9 @@ def reviews_main(config=None):
         sys.exit(1)
 
     # Cookie 优先级：命令行 --cookie > 配置 user.cookie > 环境变量 DOUBAN_COOKIE > --cookie-file / 配置 user.cookie_file
-    cookie_str = args.cookie or user_cfg.get("cookie") or os.environ.get("DOUBAN_COOKIE")
-    if not cookie_str and (args.cookie_file or user_cfg.get("cookie_file")):
-        cookie_str = load_cookie_file(args.cookie_file or user_cfg.get("cookie_file"))
+    cookie_str = args.cookie or auth_cfg.get("cookie") or os.environ.get("DOUBAN_COOKIE")
+    if not cookie_str and (args.cookie_file or auth_cfg.get("cookie_file")):
+        cookie_str = load_cookie_file(args.cookie_file or auth_cfg.get("cookie_file"))
 
     # 限制篇数：命令行 > 配置 reviews.limit
     if args.limit is None and reviews_cfg.get("limit") is not None:
