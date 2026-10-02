@@ -39,13 +39,28 @@ def _strip_tags(html_text):
 
 
 def _strip_note_citation(body):
-    """去掉豆瓣在正文末尾追加的"引自 XXX"章节引用尾注（保留笔记正文本身）。
+    """去掉豆瓣在正文末尾追加的"引自 XXX"出处尾注（保留笔记正文本身）。
 
-    两种来源都会带：Rexxar API 的 content、话题页补全的正文（如"引自 浮　桥 / 058"）。
+    两种来源都会带：Rexxar API 的 content、话题页补全的正文。
+    已知格式："引自 浮　桥 / 058"（章节/位置，引自后有空格）和
+    "引自第103页"（页码，引自后无空格）——旧正则要求引自后必须有空格，
+    导致无空格的页码尾注漏删。
     """
     if not body:
         return body
-    return re.sub(r"\s*引自\s+[^\n]*\Z", "", body).strip()
+    return re.sub(r"\s*引自\s*[^\n]*\Z", "", body).strip()
+
+
+def _extract_citation_page(body):
+    """从正文末尾的"引自第X页"尾注提取页码。
+
+    话题通道旧笔记没有独立笔记页，Rexxar API 不返回页码，这个尾注是
+    唯一的页码来源；必须先提取再 strip，否则页码会随尾注一起丢失。
+    """
+    if not body:
+        return ""
+    m = re.search(r"引自\s*第(\d+)页\s*\Z", body)
+    return m.group(1) if m else ""
 
 
 def _format_rating(rating):
@@ -482,7 +497,7 @@ def notes_main(config=None):
                 "笔记ID": w["笔记ID"],
                 "书名": book_name,
                 "章节": w["章节"],
-                "页码": "",
+                "页码": _extract_citation_page(w["正文"]),
                 "正文": _strip_note_citation(w["正文"]),
                 "创建时间": w["创建时间"],
                 "笔记链接": "",
@@ -499,6 +514,12 @@ def notes_main(config=None):
             if w["note_id"]:
                 detail = fetch_annotation_detail(opener, w["note_id"], ck=ck, expected_uid=user_id, chapter=w["章节"])
                 if detail:
+                    if not item["页码"]:
+                        # 网页摘要通常不含尾注，页码尾注只在 API 正文里；
+                        # API 的页码字段又常为空，先从正文尾注兜底提取
+                        item["页码"] = _extract_citation_page(detail["正文"])
+                    if detail.get("页码"):
+                        item["页码"] = detail["页码"]
                     item["正文"] = _strip_note_citation(detail["正文"])
                     item["笔记ID"] = detail["笔记ID"]
                     item["作者出版"] = detail["作者出版"]
